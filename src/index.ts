@@ -34,23 +34,29 @@ function nginx() {
 	);
 }
 
-const REGEX_RELEASES = /^\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_.-]+\/releases(?:\/[a-zA-Z0-9_.-]+)+$/;
-const REGEX_ASSETS = /^\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_.-]+\/releases\/download(?:\/[a-zA-Z0-9_.-]+)+$/;
-const REGEX_RAW = /^\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_.-]+\/raw(?:\/[a-zA-Z0-9_.-]+)+$/;
+const REGEXP_INFOS = [
+	{regex: /^\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_.-]+\/releases(?:\/[a-zA-Z0-9_.-]+)*$/, domain: "github.com", requestInit: {headers: {'Accept': 'application/json'}}},
+	{regex: /^\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_.-]+\/releases\/download(?:\/[a-zA-Z0-9_.-]+)+$/, domain: "github.com"},
+	{regex: /^\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_.-]+\/raw(?:\/[a-zA-Z0-9_.-]+)+$/, domain: "github.com"},
+	{regex: /^\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_.-]+\/refs\/heads\/[0-9a-zA-Z]+(?:\/[a-zA-Z0-9_.-]+)+$/, domain: "raw.githubusercontent.com"},
+	{regex: /^\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_.-]+\/[0-9a-zA-Z]+(?:\/[a-zA-Z0-9_.-]+)+$/, domain: "raw.githubusercontent.com"},
+];
+const DOMAINS = ["github.com", "github.com", "github.com"];
 
 export default {
 	fetch(request: Request<unknown, IncomingRequestCfProperties<unknown>>, env: Env, ctx: ExecutionContext): Response | Promise<Response> {
 		const url = new URL(request.url);
-		const matchType = [REGEX_RELEASES, REGEX_ASSETS, REGEX_RAW].findIndex(r=>url.pathname.match(r));
-		if (matchType < 0) return Promise.resolve(nginx());
-		const nextRequest = new Request(request.url.replace(url.origin, "https://github.com"), request);
-		if (matchType === 0) {
-			return fetch(nextRequest)
-				.then(response => new Request(response.headers.get('Location'), {
-					headers: {'Accept': 'application/json'},
-				}))
-				.then(req => fetch(req));
-		}
+		const matchInfo = REGEXP_INFOS.find(r=>url.pathname.match(r.regex));
+		if (matchInfo === undefined) return Promise.resolve(nginx());
+		console.log(matchInfo)
+		const nextRequest = new Request(request.url.replace(url.origin, "https://" + matchInfo.domain), Object.assign({}, request, matchInfo.requestInit));
+		// if (matchInfo.requestInit) {
+		// 	return fetch(nextRequest)
+		// 		.then(response => new Request(response.headers.get('Location'), {
+		// 			headers: {'Accept': 'application/json'},
+		// 		}))
+		// 		.then(req => fetch(req));
+		// }
 		return fetch(nextRequest, {redirect: 'follow'});
 	}
 
